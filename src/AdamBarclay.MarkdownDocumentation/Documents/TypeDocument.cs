@@ -11,16 +11,15 @@ namespace AdamBarclay.MarkdownDocumentation.Documents
 	{
 		internal static async Task Build(StreamWriter writer, Type type, XDocument xmlComments)
 		{
-			var typeName = TypeHelper.FullName(type);
 			var typeNameEncoded = TypeHelper.FullNameEncoded(type);
 
 			await TypeDocument.PageTitle(writer, typeNameEncoded, TypeHelper.TypeTypeTitle(type));
 			await TypeDocument.Namespace(writer, type);
 			await TypeDocument.Assembly(writer, type);
 			await TypeDocument.Description(writer, type, xmlComments);
-			await TypeDocument.Signature(writer, type, typeName);
+			await TypeDocument.Signature(writer, type);
 			await TypeDocument.TypeParameters(writer, type, xmlComments);
-			await TypeDocument.Inheritance(writer, type, typeName);
+			await TypeDocument.Inheritance(writer, type, typeNameEncoded);
 
 			if (TypeHelper.TypeIsADelegate(type))
 			{
@@ -31,7 +30,7 @@ namespace AdamBarclay.MarkdownDocumentation.Documents
 
 				// TODO - Derived
 				// TODO - Attributes
-				await TypeDocument.Constructors(writer, type, typeName, xmlComments);
+				await TypeDocument.Constructors(writer, type, typeNameEncoded, xmlComments);
 				await TypeDocument.Properties(writer, type, xmlComments);
 				await TypeDocument.Methods(writer, type, xmlComments);
 
@@ -101,17 +100,17 @@ namespace AdamBarclay.MarkdownDocumentation.Documents
 			}
 		}
 
-		private static async Task Inheritance(StreamWriter writer, Type type, string typeName)
+		private static async Task Inheritance(StreamWriter writer, Type type, string typeNameEncoded)
 		{
 			await writer.WriteLineAsync("#### Inheritance");
 
-			var path = typeName;
+			var path = typeNameEncoded;
 
 			while (type.BaseType != null)
 			{
 				type = type.BaseType;
 
-				path = TypeHelper.FullName(type) + " &rarr; " + path;
+				path = TypeHelper.FullNameEncoded(type) + " &rarr; " + path;
 			}
 
 			await writer.WriteLineAsync(path);
@@ -243,7 +242,7 @@ namespace AdamBarclay.MarkdownDocumentation.Documents
 			await writer.WriteLineAsync();
 		}
 
-		private static async Task Signature(StreamWriter writer, Type type, string typeName)
+		private static async Task Signature(StreamWriter writer, Type type)
 		{
 			await writer.WriteLineAsync("```c#");
 			await writer.WriteAsync("    public");
@@ -251,7 +250,7 @@ namespace AdamBarclay.MarkdownDocumentation.Documents
 			await writer.WriteAsync(" ");
 			await writer.WriteAsync(TypeHelper.TypeType(type));
 			await writer.WriteAsync(" ");
-			await writer.WriteAsync(typeName);
+			await writer.WriteAsync(TypeHelper.FullName(type));
 			await writer.WriteLineAsync(TypeHelper.BaseClasses(type));
 			await writer.WriteLineAsync("```");
 			await writer.WriteLineAsync();
