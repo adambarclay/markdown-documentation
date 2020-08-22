@@ -66,12 +66,12 @@ namespace AdamBarclay.MarkdownDocumentation.Documents
 
 					if (parameters.Length > 0)
 					{
-						await writer.WriteAsync(TypeHelper.FullName(parameters[0].ParameterType));
+						await writer.WriteAsync(TypeHelper.FullNameEncoded(parameters[0].ParameterType));
 
 						for (var i = 1; i < parameters.Length; i++)
 						{
 							await writer.WriteAsync(", ");
-							await writer.WriteAsync(TypeHelper.FullName(parameters[i].ParameterType));
+							await writer.WriteAsync(TypeHelper.FullNameEncoded(parameters[i].ParameterType));
 						}
 					}
 
