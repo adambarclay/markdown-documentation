@@ -6,14 +6,16 @@ on:
     tags-ignore:
       - '*.*'
     paths-ignore:
-      - README.md
+      - 'README.md'
+      - 'docs/**'
   pull_request:
     branches:
       - main
     tags-ignore:
       - '*.*'
     paths-ignore:
-      - README.md
+      - 'README.md'
+      - 'docs/**'
 jobs:
   build:
     runs-on: ubuntu-latest
