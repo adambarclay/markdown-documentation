@@ -79,7 +79,7 @@ namespace AdamBarclay.MarkdownDocumentation.Helpers
 		{
 			var name = memberInfo.DeclaringType?.FullName;
 
-			return name != "System.Exception" && name != "System.Delegate" && name != "System.Object";
+			return name != "System.Exception" && name != "System.Delegate" && name != "System.Object" && name != "System.ValueType";
 		}
 
 		internal static bool TypeIsADelegate(Type type)
