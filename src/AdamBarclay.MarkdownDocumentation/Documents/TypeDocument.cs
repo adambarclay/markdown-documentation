@@ -77,14 +77,14 @@ namespace AdamBarclay.MarkdownDocumentation.Documents
 					await writer.WriteAsync(")|");
 
 					await writer.WriteLineAsync(
-						XmlCommentHelper.MethodElement(xmlComments, constructor)?.Element("summary")?.Value);
+						XmlCommentHelper.Summary(XmlCommentHelper.MethodElement(xmlComments, constructor)));
 				}
 			}
 		}
 
 		private static async Task Description(StreamWriter writer, Type type, XDocument xmlComments)
 		{
-			await writer.WriteLineAsync(XmlCommentHelper.TypeElement(xmlComments, type)?.Element("summary")?.Value);
+			await writer.WriteLineAsync(XmlCommentHelper.Summary(XmlCommentHelper.TypeElement(xmlComments, type)));
 			await writer.WriteLineAsync();
 		}
 
@@ -164,8 +164,7 @@ namespace AdamBarclay.MarkdownDocumentation.Documents
 
 					await writer.WriteAsync(")|");
 
-					var summary = XmlCommentHelper.MethodElement(xmlComments, method)?.Element("summary")?.Value ??
-						string.Empty;
+					var summary = XmlCommentHelper.Summary(XmlCommentHelper.MethodElement(xmlComments, method));
 
 					await writer.WriteAsync(summary);
 

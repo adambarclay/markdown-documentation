@@ -21,8 +21,10 @@ namespace AdamBarclay.MarkdownDocumentation.Helpers
 
 		internal static XElement? MethodElement(XDocument xmlComments, MethodBase methodInfo)
 		{
+			var nameAttributeValue = XmlCommentHelper.MemberNameAttribute(methodInfo);
+
 			return xmlComments.Root?.Descendants("member")
-				.FirstOrDefault(o => XmlCommentHelper.MemberAttribute(o, methodInfo));
+				.FirstOrDefault(o => o.Attribute("name")?.Value == nameAttributeValue);
 		}
 
 		internal static string Property(XDocument xmlComments, PropertyInfo property)
@@ -35,13 +37,35 @@ namespace AdamBarclay.MarkdownDocumentation.Helpers
 				string.Empty;
 		}
 
+		internal static string Summary(XElement? node)
+		{
+			if (node != null)
+			{
+				var summary = node.Element("summary");
+
+				if (summary != null)
+				{
+					return summary.Value;
+				}
+
+				var inherit = node.Element("inheritdoc");
+
+				if (inherit != null)
+				{
+					return "inheritdoc";
+				}
+			}
+
+			return string.Empty;
+		}
+
 		internal static XElement? TypeElement(XDocument xmlComments, Type type)
 		{
 			return xmlComments.Root?.Descendants("member")
 				.FirstOrDefault(o => o.Attribute("name")?.Value == $"T:{type.FullName}");
 		}
 
-		private static bool MemberAttribute(XElement element, MethodBase methodInfo)
+		private static string MemberNameAttribute(MethodBase methodInfo)
 		{
 			var stringBuilder = new StringBuilder(256);
 
@@ -50,24 +74,121 @@ namespace AdamBarclay.MarkdownDocumentation.Helpers
 			stringBuilder.Append('.');
 			stringBuilder.Append(methodInfo.Name.Replace('.', '#'));
 
+			Type[]? genericTypeArguments = null;
+
+			if (methodInfo.DeclaringType != null && methodInfo.DeclaringType.IsGenericTypeDefinition)
+			{
+				genericTypeArguments = methodInfo.DeclaringType.GetGenericArguments();
+			}
+
+			Type[]? genericMethodArguments = null;
+
+			if (methodInfo.IsGenericMethodDefinition)
+			{
+				genericMethodArguments = methodInfo.GetGenericArguments();
+
+				stringBuilder.Append("``");
+				stringBuilder.Append(methodInfo.GetGenericArguments().Length);
+			}
+
 			var parameters = methodInfo.GetParameters();
 
 			if (parameters.Length > 0)
 			{
-				// TODO - generic parameters
 				stringBuilder.Append('(');
-				stringBuilder.Append(parameters[0].ParameterType.FullName);
+
+				stringBuilder.Append(
+					XmlCommentHelper.ReplaceGenericMethodParameter(
+						genericTypeArguments,
+						genericMethodArguments,
+						parameters[0].ParameterType));
 
 				for (var i = 1; i < parameters.Length; ++i)
 				{
 					stringBuilder.Append(',');
-					stringBuilder.Append(parameters[i].ParameterType.FullName);
+
+					stringBuilder.Append(
+						XmlCommentHelper.ReplaceGenericMethodParameter(
+							genericTypeArguments,
+							genericMethodArguments,
+							parameters[i].ParameterType));
 				}
 
 				stringBuilder.Append(')');
 			}
 
-			return element.Attribute("name")?.Value == stringBuilder.ToString();
+			return stringBuilder.ToString();
+		}
+
+		private static string? ReplaceGenericMethodParameter(
+			Type[]? genericTypeArguments,
+			Type[]? genericMethodArguments,
+			Type parameterType)
+		{
+			if (parameterType.IsGenericType)
+			{
+				var parameterGenericArguments = parameterType.GetGenericArguments();
+
+				var stringBuilder = new StringBuilder(256);
+
+				stringBuilder.Append(parameterType.Namespace);
+
+				if (!string.IsNullOrEmpty(parameterType.Namespace))
+				{
+					stringBuilder.Append('.');
+				}
+
+				stringBuilder.Append(parameterType.Name.Split('`')[0]);
+				stringBuilder.Append('{');
+
+				stringBuilder.Append(
+					XmlCommentHelper.ReplaceGenericMethodParameter(
+						genericTypeArguments,
+						genericMethodArguments,
+						parameterGenericArguments[0]));
+
+				for (var i = 1; i < parameterGenericArguments.Length; ++i)
+				{
+					stringBuilder.Append(',');
+
+					stringBuilder.Append(
+						XmlCommentHelper.ReplaceGenericMethodParameter(
+							genericTypeArguments,
+							genericMethodArguments,
+							parameterGenericArguments[i]));
+				}
+
+				stringBuilder.Append('}');
+
+				return stringBuilder.ToString();
+			}
+
+			if (parameterType.FullName == null)
+			{
+				if (genericTypeArguments != null)
+				{
+					for (var i = 0; i < genericTypeArguments.Length; ++i)
+					{
+						if (genericTypeArguments[i].Name == parameterType.Name)
+						{
+							return "`" + i;
+						}
+					}
+				}
+
+				if (genericMethodArguments != null)
+				{
+					for (var i = 0; i < genericMethodArguments.Length; ++i)
+					{
+						if (genericMethodArguments[i].Name == parameterType.Name)
+						{
+							return "``" + i;
+						}
+					}
+				}
+			}
+
+			return parameterType.FullName;
 		}
 	}
 }

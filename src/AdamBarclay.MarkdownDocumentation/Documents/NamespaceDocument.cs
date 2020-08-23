@@ -30,7 +30,7 @@ namespace AdamBarclay.MarkdownDocumentation.Documents
 				await writer.WriteAsync("](");
 				await writer.WriteAsync(FileNameHelper.TypeFileName(string.Empty, type));
 				await writer.WriteAsync(")|");
-				await writer.WriteAsync(XmlCommentHelper.TypeElement(xmlComments, type)?.Element("summary")?.Value);
+				await writer.WriteAsync(XmlCommentHelper.Summary(XmlCommentHelper.TypeElement(xmlComments, type)));
 				await writer.WriteLineAsync("|");
 			}
 
