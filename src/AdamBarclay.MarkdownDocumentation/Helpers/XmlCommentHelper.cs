@@ -11,11 +11,40 @@ namespace AdamBarclay.MarkdownDocumentation.Helpers
 {
 	internal static class XmlCommentHelper
 	{
+		internal static string GenericArgument(XDocument xmlComments, Type genericArgumentType)
+		{
+			return xmlComments.Root?.Descendants("member")
+					.FirstOrDefault(
+						o => o.Attribute("name")?.Value == $"T:{genericArgumentType.DeclaringType?.FullName}")
+					?.Descendants("typeparam")
+					.FirstOrDefault(o => o.Attribute("name")?.Value == genericArgumentType.Name)
+					?.Value ??
+				string.Empty;
+		}
+
+		internal static XElement? MethodElement(XDocument xmlComments, MethodBase methodInfo)
+		{
+			var nameAttributeValue = XmlCommentHelper.MemberNameAttribute(methodInfo);
+
+			return xmlComments.Root?.Descendants("member")
+				.FirstOrDefault(o => o.Attribute("name")?.Value == nameAttributeValue);
+		}
+
 		internal static string Parameter(XDocument xmlComments, MethodBase method, ParameterInfo parameter)
 		{
 			return XmlCommentHelper.MethodElement(xmlComments, method)
 					?.Descendants("param")
 					.FirstOrDefault(el => el.Attribute("name")?.Value == parameter.Name)
+					?.Value ??
+				string.Empty;
+		}
+
+		internal static string Property(XDocument xmlComments, PropertyInfo property)
+		{
+			return xmlComments.Root?.Descendants("member")
+					.FirstOrDefault(
+						o => o.Attribute("name")?.Value == $"P:{property.DeclaringType?.FullName}.{property.Name}")
+					?.Element("summary")
 					?.Value ??
 				string.Empty;
 		}
@@ -27,6 +56,34 @@ namespace AdamBarclay.MarkdownDocumentation.Helpers
 					.FirstOrDefault()
 					?.Value ??
 				string.Empty;
+		}
+
+		internal static string Summary(XElement? node)
+		{
+			if (node != null)
+			{
+				var summary = node.Element("summary");
+
+				if (summary != null)
+				{
+					return summary.Value;
+				}
+
+				var inherit = node.Element("inheritdoc");
+
+				if (inherit != null)
+				{
+					return "inheritdoc";
+				}
+			}
+
+			return string.Empty;
+		}
+
+		internal static XElement? TypeElement(XDocument xmlComments, Type type)
+		{
+			return xmlComments.Root?.Descendants("member")
+				.FirstOrDefault(o => o.Attribute("name")?.Value == $"T:{type.FullName}");
 		}
 
 		internal static string TypeParameter(XDocument xmlComments, MethodInfo method, Type genericArgument)
@@ -65,63 +122,6 @@ namespace AdamBarclay.MarkdownDocumentation.Helpers
 					await writer.WriteAsync(node.ToString());
 				}
 			}
-		}
-
-		internal static string GenericArgument(XDocument xmlComments, Type genericArgumentType)
-		{
-			return xmlComments.Root?.Descendants("member")
-					.FirstOrDefault(
-						o => o.Attribute("name")?.Value == $"T:{genericArgumentType.DeclaringType?.FullName}")
-					?.Descendants("typeparam")
-					.FirstOrDefault(o => o.Attribute("name")?.Value == genericArgumentType.Name)
-					?.Value ??
-				string.Empty;
-		}
-
-		internal static XElement? MethodElement(XDocument xmlComments, MethodBase methodInfo)
-		{
-			var nameAttributeValue = XmlCommentHelper.MemberNameAttribute(methodInfo);
-
-			return xmlComments.Root?.Descendants("member")
-				.FirstOrDefault(o => o.Attribute("name")?.Value == nameAttributeValue);
-		}
-
-		internal static string Property(XDocument xmlComments, PropertyInfo property)
-		{
-			return xmlComments.Root?.Descendants("member")
-					.FirstOrDefault(
-						o => o.Attribute("name")?.Value == $"P:{property.DeclaringType?.FullName}.{property.Name}")
-					?.Element("summary")
-					?.Value ??
-				string.Empty;
-		}
-
-		internal static string Summary(XElement? node)
-		{
-			if (node != null)
-			{
-				var summary = node.Element("summary");
-
-				if (summary != null)
-				{
-					return summary.Value;
-				}
-
-				var inherit = node.Element("inheritdoc");
-
-				if (inherit != null)
-				{
-					return "inheritdoc";
-				}
-			}
-
-			return string.Empty;
-		}
-
-		internal static XElement? TypeElement(XDocument xmlComments, Type type)
-		{
-			return xmlComments.Root?.Descendants("member")
-				.FirstOrDefault(o => o.Attribute("name")?.Value == $"T:{type.FullName}");
 		}
 
 		private static string MemberNameAttribute(MethodBase methodInfo)
