@@ -7,7 +7,7 @@ namespace AdamBarclay.MarkdownDocumentation.Documents
 {
 	internal static class AssemblyDocument
 	{
-		public static async Task Build(StreamWriter writer, Assembly assembly, IEnumerable<string> typeNamespaces)
+		internal static async Task Build(StreamWriter writer, Assembly assembly, IEnumerable<string> typeNamespaces)
 		{
 			await writer.WriteAsync("# ");
 			await writer.WriteAsync(assembly.GetName().Name);

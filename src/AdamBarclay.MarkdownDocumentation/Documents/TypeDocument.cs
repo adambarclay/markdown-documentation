@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -11,42 +12,34 @@ namespace AdamBarclay.MarkdownDocumentation.Documents
 	{
 		internal static async Task Build(StreamWriter writer, Type type, XDocument xmlComments)
 		{
-			var typeNameEncoded = TypeHelper.FullNameEncoded(type);
+			await DocumentHelpers.PageTitle(
+				writer,
+				async w => await TypeHelper.FullName(w, type, t => t.Name, "&lt;", "&gt;"),
+				TypeHelper.TypeTypeTitle(type));
 
-			await TypeDocument.PageTitle(writer, typeNameEncoded, TypeHelper.TypeTypeTitle(type));
-			await TypeDocument.Namespace(writer, type);
-			await TypeDocument.Assembly(writer, type);
-			await TypeDocument.Description(writer, type, xmlComments);
+			await DocumentHelpers.PageHeader(writer, type, xmlComments);
+
+			await writer.WriteLineAsync(XmlCommentHelper.Summary(XmlCommentHelper.TypeElement(xmlComments, type)));
+			await writer.WriteLineAsync();
+
 			await TypeDocument.Signature(writer, type);
 			await TypeDocument.TypeParameters(writer, type, xmlComments);
-			await TypeDocument.Inheritance(writer, type, typeNameEncoded);
+			await TypeDocument.Inheritance(writer, type);
 
-			if (TypeHelper.TypeIsADelegate(type))
-			{
-			}
-			else
-			{
-				await TypeDocument.Implements(writer, type);
+			await TypeDocument.Implements(writer, type);
 
-				// TODO - Derived
-				// TODO - Attributes
-				await TypeDocument.Constructors(writer, type, typeNameEncoded, xmlComments);
-				await TypeDocument.Properties(writer, type, xmlComments);
-				await TypeDocument.Methods(writer, type, xmlComments);
+			// TODO - Derived
+			// TODO - Attributes
+			await TypeDocument.Constructors(writer, type, xmlComments);
+			await TypeDocument.Properties(writer, type, xmlComments);
+			await TypeDocument.Methods(writer, type, xmlComments);
 
-				// TODO - Operators
-				// TODO - Explicit Interface Implementations
-				// TODO - Extension Methods
-			}
+			// TODO - Operators
+			// TODO - Explicit Interface Implementations
+			// TODO - Extension Methods
 		}
 
-		private static async Task Assembly(StreamWriter writer, Type type)
-		{
-			await writer.WriteLineAsync($"Assembly: {Path.GetFileName(type.Assembly.Location)}");
-			await writer.WriteLineAsync();
-		}
-
-		private static async Task Constructors(StreamWriter writer, Type type, string typeName, XDocument xmlComments)
+		private static async Task Constructors(StreamWriter writer, Type type, XDocument xmlComments)
 		{
 			var constructors = type.GetConstructors();
 
@@ -58,34 +51,33 @@ namespace AdamBarclay.MarkdownDocumentation.Documents
 
 				foreach (var constructor in constructors)
 				{
-					await writer.WriteAsync(typeName);
+					await writer.WriteAsync("[");
+
+					await TypeHelper.FullName(writer, type, t => t.Name, "&lt;", "&gt;");
+
 					await writer.WriteAsync("(");
 
 					var parameters = constructor.GetParameters();
 
 					if (parameters.Length > 0)
 					{
-						await writer.WriteAsync(TypeHelper.FullNameEncoded(parameters[0].ParameterType));
+						await TypeHelper.FullName(writer, parameters[0].ParameterType, t => t.Name, "&lt;", "&gt;");
 
 						for (var i = 1; i < parameters.Length; i++)
 						{
 							await writer.WriteAsync(", ");
-							await writer.WriteAsync(TypeHelper.FullNameEncoded(parameters[i].ParameterType));
+							await TypeHelper.FullName(writer, parameters[i].ParameterType, t => t.Name, "&lt;", "&gt;");
 						}
 					}
 
+					await writer.WriteAsync(")](");
+					await writer.WriteAsync(FileNameHelper.ConstructorFileName(string.Empty, type));
 					await writer.WriteAsync(")|");
 
 					await writer.WriteLineAsync(
 						XmlCommentHelper.Summary(XmlCommentHelper.MethodElement(xmlComments, constructor)));
 				}
 			}
-		}
-
-		private static async Task Description(StreamWriter writer, Type type, XDocument xmlComments)
-		{
-			await writer.WriteLineAsync(XmlCommentHelper.Summary(XmlCommentHelper.TypeElement(xmlComments, type)));
-			await writer.WriteLineAsync();
 		}
 
 		private static async Task Implements(StreamWriter writer, Type type)
@@ -95,25 +87,44 @@ namespace AdamBarclay.MarkdownDocumentation.Documents
 			if (interfaces.Length > 0)
 			{
 				await writer.WriteLineAsync("#### Implements");
-				await writer.WriteLineAsync(string.Join(", ", interfaces.Select(TypeHelper.FullNameEncoded)));
+
+				await TypeHelper.FullName(writer, interfaces[0], t => t.Name, "&lt;", "&gt;");
+
+				for (var i = 1; i < interfaces.Length; ++i)
+				{
+					await writer.WriteAsync(", ");
+					await TypeHelper.FullName(writer, interfaces[i], t => t.Name, "&lt;", "&gt;");
+				}
+
 				await writer.WriteLineAsync();
 			}
 		}
 
-		private static async Task Inheritance(StreamWriter writer, Type type, string typeNameEncoded)
+		private static async Task Inheritance(StreamWriter writer, Type type)
 		{
 			await writer.WriteLineAsync("#### Inheritance");
 
-			var path = typeNameEncoded;
+			var stack = new Stack<Type>();
 
-			while (type.BaseType != null)
+			var baseType = type;
+
+			while (baseType.BaseType != null)
 			{
-				type = type.BaseType;
+				stack.Push(baseType.BaseType);
 
-				path = TypeHelper.FullNameEncoded(type) + " &rarr; " + path;
+				baseType = baseType.BaseType;
 			}
 
-			await writer.WriteLineAsync(path);
+			while (stack.Count > 0)
+			{
+				await TypeHelper.FullName(writer, stack.Pop(), t => t.Name, "&lt;", "&gt;");
+
+				await writer.WriteAsync(" &rarr; ");
+			}
+
+			await TypeHelper.FullName(writer, type, t => t.Name, "&lt;", "&gt;");
+
+			await writer.WriteLineAsync();
 			await writer.WriteLineAsync();
 		}
 
@@ -129,6 +140,7 @@ namespace AdamBarclay.MarkdownDocumentation.Documents
 
 				foreach (var method in methods)
 				{
+					await writer.WriteAsync("[");
 					await writer.WriteAsync(method.Name);
 
 					if (method.IsGenericMethodDefinition)
@@ -136,12 +148,12 @@ namespace AdamBarclay.MarkdownDocumentation.Documents
 						var genericArguments = method.GetGenericArguments();
 
 						await writer.WriteAsync("&lt;");
-						await writer.WriteAsync(TypeHelper.FullNameEncoded(genericArguments[0]));
+						await TypeHelper.FullName(writer, genericArguments[0], t => t.Name, "&lt;", "&gt;");
 
 						for (var i = 1; i < genericArguments.Length; ++i)
 						{
 							await writer.WriteAsync(",");
-							await writer.WriteAsync(TypeHelper.FullNameEncoded(genericArguments[i]));
+							await TypeHelper.FullName(writer, genericArguments[i], t => t.Name, "&lt;", "&gt;");
 						}
 
 						await writer.WriteAsync("&gt;");
@@ -153,15 +165,17 @@ namespace AdamBarclay.MarkdownDocumentation.Documents
 
 					if (parameters.Length > 0)
 					{
-						await writer.WriteAsync(TypeHelper.FullNameEncoded(parameters[0].ParameterType));
+						await TypeHelper.FullName(writer, parameters[0].ParameterType, t => t.Name, "&lt;", "&gt;");
 
 						for (var i = 1; i < parameters.Length; i++)
 						{
 							await writer.WriteAsync(", ");
-							await writer.WriteAsync(TypeHelper.FullNameEncoded(parameters[i].ParameterType));
+							await TypeHelper.FullName(writer, parameters[i].ParameterType, t => t.Name, "&lt;", "&gt;");
 						}
 					}
 
+					await writer.WriteAsync(")](");
+					await writer.WriteAsync(FileNameHelper.MethodFileName(string.Empty, method));
 					await writer.WriteAsync(")|");
 
 					var summary = XmlCommentHelper.Summary(XmlCommentHelper.MethodElement(xmlComments, method));
@@ -185,24 +199,6 @@ namespace AdamBarclay.MarkdownDocumentation.Documents
 			}
 		}
 
-		private static async Task Namespace(StreamWriter writer, Type type)
-		{
-			await writer.WriteAsync("Namespace: [");
-			await writer.WriteAsync(type.Namespace ?? "&lt;empty&gt;");
-			await writer.WriteAsync("](");
-			await writer.WriteAsync(FileNameHelper.NamespaceFileName(string.Empty, type.Namespace));
-			await writer.WriteLineAsync(")  ");
-		}
-
-		private static async Task PageTitle(StreamWriter writer, string typeName, string typeType)
-		{
-			await writer.WriteAsync("# ");
-			await writer.WriteAsync(typeName);
-			await writer.WriteAsync(" ");
-			await writer.WriteLineAsync(typeType);
-			await writer.WriteLineAsync();
-		}
-
 		private static async Task Properties(StreamWriter writer, Type type, XDocument xmlComments)
 		{
 			var properties = type.GetProperties().Where(TypeHelper.IgnoreDeclaringType).ToList();
@@ -215,8 +211,11 @@ namespace AdamBarclay.MarkdownDocumentation.Documents
 
 				foreach (var property in properties.OrderBy(o => o.Name))
 				{
+					await writer.WriteAsync("[");
 					await writer.WriteAsync(property.Name);
-					await writer.WriteAsync("|");
+					await writer.WriteAsync("](");
+					await writer.WriteAsync(FileNameHelper.PropertyFileName(string.Empty, property));
+					await writer.WriteAsync(")|");
 
 					var summary = XmlCommentHelper.Property(xmlComments, property);
 
@@ -249,8 +248,9 @@ namespace AdamBarclay.MarkdownDocumentation.Documents
 			await writer.WriteAsync(" ");
 			await writer.WriteAsync(TypeHelper.TypeType(type));
 			await writer.WriteAsync(" ");
-			await writer.WriteAsync(TypeHelper.FullName(type));
-			await writer.WriteLineAsync(TypeHelper.BaseClasses(type));
+			await TypeHelper.FullName(writer, type, t => t.Name, "<", ">");
+			await TypeHelper.BaseClasses(writer, type);
+			await writer.WriteLineAsync();
 			await writer.WriteLineAsync("```");
 			await writer.WriteLineAsync();
 		}

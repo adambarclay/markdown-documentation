@@ -1,78 +1,108 @@
 using System;
+using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using System.Threading.Tasks;
 
 namespace AdamBarclay.MarkdownDocumentation.Helpers
 {
 	internal static class TypeHelper
 	{
-		internal static string BaseClasses(Type type)
+		private static readonly Dictionary<string, string> Aliases = new Dictionary<string, string>
 		{
-			var baseType = string.Empty;
+			{ "System.Byte", "byte" },
+			{ "System.SByte", "sbyte" },
+			{ "System.Int16", "short" },
+			{ "System.UInt16", "ushort" },
+			{ "System.Int32", "int" },
+			{ "System.UInt32", "uint" },
+			{ "System.Int64", "long" },
+			{ "System.UInt64", "ulong" },
+			{ "System.Single", "float" },
+			{ "System.Double", "double" },
+			{ "System.Decimal", "decimal" },
+			{ "System.Object", "object" },
+			{ "System.Boolean", "bool" },
+			{ "System.Char", "char" },
+			{ "System.String", "string" },
+			{ "System.Void", "void" }
+		};
 
+		internal static async Task BaseClasses(StreamWriter writer, Type type)
+		{
 			if (!TypeHelper.TypeIsADelegate(type))
 			{
-				var interfaces = TypeHelper.Interfaces(type);
-
 				if (type.BaseType != null &&
 					type.BaseType.FullName != "System.Object" &&
 					type.BaseType.FullName != "System.ValueType")
 				{
-					baseType = type.BaseType.Name;
-
-					if (interfaces.Length > 0)
-					{
-						baseType += ", ";
-					}
+					await writer.WriteAsync(" : ");
+					await writer.WriteAsync(type.BaseType.Name);
+					await TypeHelper.Interfaces(writer, type, ", ");
 				}
-
-				baseType += interfaces;
+				else
+				{
+					await TypeHelper.Interfaces(writer, type, " : ");
+				}
 			}
-
-			return baseType.Length > 0 ? " : " + baseType : string.Empty;
 		}
 
-		internal static string FullName(Type type)
+		internal static async Task FullName(
+			StreamWriter writer,
+			Type type,
+			Func<Type, string> typeName,
+			string openAngle,
+			string closeAngle)
 		{
+			if (type.IsByRef)
+			{
+				type = type.GetElementType()!;
+			}
+
 			if (type.IsGenericType)
 			{
-				var typeName = type.Name.Split('`')[0];
+				await writer.WriteAsync(type.Name.Split('`')[0]);
 
 				var genericArguments = type.GetGenericArguments();
 
-				typeName += $"<{TypeHelper.FullName(genericArguments[0])}";
+				await writer.WriteAsync(openAngle);
+
+				await TypeHelper.FullName(writer, genericArguments[0], typeName, openAngle, closeAngle);
 
 				for (var i = 1; i < genericArguments.Length; ++i)
 				{
-					typeName += "," + TypeHelper.FullName(genericArguments[i]);
+					await writer.WriteAsync(",");
+
+					await TypeHelper.FullName(writer, genericArguments[i], typeName, openAngle, closeAngle);
 				}
 
-				return typeName + ">";
+				await writer.WriteAsync(closeAngle);
 			}
-
-			return type.Name;
+			else
+			{
+				await writer.WriteAsync(typeName(type));
+			}
 		}
 
-		internal static string FullNameEncoded(Type type)
+		internal static Type? GetType(Assembly assembly, string typeName)
 		{
-			if (type.IsGenericType)
+			var type = Type.GetType(typeName);
+
+			if (type != null)
 			{
-				var typeName = type.Name.Split('`')[0];
-
-				var genericArguments = type.GetGenericArguments();
-
-				typeName += $"&lt;{TypeHelper.FullNameEncoded(genericArguments[0])}";
-
-				for (var i = 1; i < genericArguments.Length; ++i)
-				{
-					typeName += "," + TypeHelper.FullNameEncoded(genericArguments[i]);
-				}
-
-				return typeName + "&gt;";
+				return type;
 			}
 
-			return type.Name;
+			type = assembly.GetType(typeName);
+
+			if (type != null)
+			{
+				return type;
+			}
+
+			return null;
 		}
 
 		internal static bool IgnoreDeclaringType(MemberInfo memberInfo)
@@ -129,6 +159,31 @@ namespace AdamBarclay.MarkdownDocumentation.Helpers
 			}
 
 			return string.Empty;
+		}
+
+		internal static string TypeNameAliased(Type type)
+		{
+			if (type.FullName != null)
+			{
+				if (type.BaseType?.FullName == "System.Array")
+				{
+					var elementType = type.GetElementType()!;
+
+					if (TypeHelper.Aliases.TryGetValue(elementType.FullName ?? elementType.Name, out var typeNameAlias))
+					{
+						return typeNameAlias + "[]";
+					}
+				}
+				else
+				{
+					if (TypeHelper.Aliases.TryGetValue(type.FullName, out var typeNameAlias))
+					{
+						return typeNameAlias;
+					}
+				}
+			}
+
+			return type.Name;
 		}
 
 		internal static string TypeType(Type type)
@@ -191,16 +246,26 @@ namespace AdamBarclay.MarkdownDocumentation.Helpers
 			return string.Empty;
 		}
 
-		private static string Interfaces(Type type)
+		private static async Task Interfaces(StreamWriter writer, Type type, string initialSeparator)
 		{
-			var interfaces = type.GetInterfaces();
+			var interfaces = type.GetInterfaces()
+				.Except(
+					type.GetInterfaces()
+						.SelectMany(o => o.GetInterfaces())
+						.Concat(type.BaseType?.GetInterfaces() ?? Array.Empty<Type>()))
+				.ToList();
 
-			return string.Join(
-				", ",
-				interfaces.Except(
-						interfaces.SelectMany(o => o.GetInterfaces())
-							.Concat(type.BaseType?.GetInterfaces() ?? Array.Empty<Type>()))
-					.Select(TypeHelper.FullName));
+			if (interfaces.Count > 0)
+			{
+				await writer.WriteAsync(initialSeparator);
+				await TypeHelper.FullName(writer, interfaces[0], t => t.Name, "<", ">");
+
+				for (var i = 1; i < interfaces.Count; ++i)
+				{
+					await writer.WriteAsync(", ");
+					await TypeHelper.FullName(writer, interfaces[i], t => t.Name, "<", ">");
+				}
+			}
 		}
 	}
 }

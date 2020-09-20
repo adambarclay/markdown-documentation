@@ -1,13 +1,72 @@
 using System;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text;
+using System.Threading.Tasks;
+using System.Xml;
 using System.Xml.Linq;
 
 namespace AdamBarclay.MarkdownDocumentation.Helpers
 {
 	internal static class XmlCommentHelper
 	{
+		internal static string Parameter(XDocument xmlComments, MethodBase method, ParameterInfo parameter)
+		{
+			return XmlCommentHelper.MethodElement(xmlComments, method)
+					?.Descendants("param")
+					.FirstOrDefault(el => el.Attribute("name")?.Value == parameter.Name)
+					?.Value ??
+				string.Empty;
+		}
+
+		internal static string Returns(XDocument xmlComments, MethodInfo method)
+		{
+			return XmlCommentHelper.MethodElement(xmlComments, method)
+					?.Descendants("returns")
+					.FirstOrDefault()
+					?.Value ??
+				string.Empty;
+		}
+
+		internal static string TypeParameter(XDocument xmlComments, MethodInfo method, Type genericArgument)
+		{
+			return XmlCommentHelper.MethodElement(xmlComments, method)
+					?.Descendants("typeparam")
+					.FirstOrDefault(el => el.Attribute("name")?.Value == genericArgument.Name)
+					?.Value ??
+				string.Empty;
+		}
+
+		internal static async Task WriteValue(StreamWriter writer, XElement value)
+		{
+			foreach (var node in value.Nodes())
+			{
+				if (node.NodeType == XmlNodeType.Element)
+				{
+					var element = (XElement)node;
+
+					if (element.Name == "paramref" || element.Name == "typeparamref")
+					{
+						await writer.WriteAsync("`");
+						await writer.WriteAsync(element.Attributes("name").FirstOrDefault()?.Value);
+						await writer.WriteAsync("`");
+					}
+					else if (element.Name == "see")
+					{
+						await writer.WriteAsync("`");
+						await writer.WriteAsync(element.Attributes("cref").FirstOrDefault()?.Value);
+						await writer.WriteAsync(element.Attributes("langword").FirstOrDefault()?.Value);
+						await writer.WriteAsync("`");
+					}
+				}
+				else
+				{
+					await writer.WriteAsync(node.ToString());
+				}
+			}
+		}
+
 		internal static string GenericArgument(XDocument xmlComments, Type genericArgumentType)
 		{
 			return xmlComments.Root?.Descendants("member")

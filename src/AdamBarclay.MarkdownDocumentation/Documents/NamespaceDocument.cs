@@ -26,7 +26,7 @@ namespace AdamBarclay.MarkdownDocumentation.Documents
 			foreach (var type in types)
 			{
 				await writer.WriteAsync("|[");
-				await writer.WriteAsync(TypeHelper.FullNameEncoded(type));
+				await TypeHelper.FullName(writer, type, t => t.Name, "&lt;", "&gt;");
 				await writer.WriteAsync("](");
 				await writer.WriteAsync(FileNameHelper.TypeFileName(string.Empty, type));
 				await writer.WriteAsync(")|");

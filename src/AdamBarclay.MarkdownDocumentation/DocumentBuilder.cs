@@ -20,10 +20,77 @@ namespace AdamBarclay.MarkdownDocumentation
 			{
 				foreach (var type in types)
 				{
-					// TODO - members files
+					if (!TypeHelper.TypeIsADelegate(type))
+					{
+						var constructors = type
+							.GetConstructors(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+							.Where(o => o.IsPublic || o.IsFamily)
+							.ToList();
+
+						if (constructors.Count > 0)
+						{
+							await using (var writer = File.CreateText(
+								FileNameHelper.ConstructorFileName(outputPath, type)))
+							{
+								if (constructors.Count > 1)
+								{
+									await ConstructorDocument.BuildMultiple(writer, type, constructors, xmlComments);
+								}
+								else
+								{
+									await ConstructorDocument.BuildSingle(writer, type, constructors[0], xmlComments);
+								}
+							}
+						}
+
+						foreach (var property in type.GetProperties().Where(o => o.DeclaringType == type))
+						{
+							await using (var writer =
+								File.CreateText(FileNameHelper.PropertyFileName(outputPath, property)))
+							{
+								await PropertyDocument.Build(writer, property, xmlComments);
+							}
+						}
+
+						foreach (var methods in type
+							.GetMethods(
+								BindingFlags.Instance |
+								BindingFlags.Static |
+								BindingFlags.Public |
+								BindingFlags.NonPublic)
+							.Where(
+								o => o.DeclaringType == type &&
+									!o.IsSpecialName &&
+									(o.IsPublic || o.IsFamily) &&
+									(!o.IsVirtual || (o.Attributes & MethodAttributes.NewSlot) != 0))
+							.GroupBy(o => o.Name)
+							.Select(o => o.ToList()))
+						{
+							await using (var writer =
+								File.CreateText(FileNameHelper.MethodFileName(outputPath, methods[0])))
+							{
+								if (methods.Count > 1)
+								{
+									await MethodDocument.BuildMultiple(writer, assembly, type, methods, xmlComments);
+								}
+								else
+								{
+									await MethodDocument.BuildSingle(writer, assembly, type, methods[0], xmlComments);
+								}
+							}
+						}
+					}
+
 					await using (var writer = File.CreateText(FileNameHelper.TypeFileName(outputPath, type)))
 					{
-						await TypeDocument.Build(writer, type, xmlComments);
+						if (TypeHelper.TypeIsADelegate(type))
+						{
+							await DelegateDocument.Build(writer, type, xmlComments);
+						}
+						else
+						{
+							await TypeDocument.Build(writer, type, xmlComments);
+						}
 					}
 				}
 
